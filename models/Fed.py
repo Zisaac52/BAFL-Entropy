@@ -35,24 +35,52 @@ def getP(s_k, s_k_i):
     return s_k_i / sum_s_k
 
 
-def getEk(N_D, s_k):
-    sum = 0
-    for i in range(N_D):
-        p = getP(s_k, s_k[i])
-        if p == 0:
-            continue
-        sum += p * math.log(p)
-    return -1.0 * (1 / math.log(N_D)) * sum
+# def getEk(N_D, s_k):
+#     sum = 0
+#     for i in range(N_D):
+#         p = getP(s_k, s_k[i])
+#         if p == 0:
+#             continue
+#         sum += p * math.log(p)
+#     return -1.0 * (1 / math.log(N_D)) * sum
 
 
-# 根据熵权法取得当前指标的权重
-def getWk(N_D, s, s_i):
-    sum = 0
+# # 根据熵权法取得当前指标的权重
+# def getWk(N_D, s, s_i):
+#     sum = 0
+#     for i in range(len(s)):
+#         sum += getEk(N_D, s[i])
+#     return (1 - getEk(N_D, s_i)) / (len(s) - sum)
+
+# 计算 Rényi 熵
+def getRenyiEntropy(N_D, s_k, alpha=2):
+    if alpha == 1:
+        # α = 1 时，Rényi 熵退化为 Shannon 熵，特殊处理
+        sum_entropy = 0
+        for i in range(N_D):
+            p = getP(s_k, s_k[i])
+            if p == 0:
+                continue
+            sum_entropy += p * math.log(p)
+        return -1.0 * (1 / math.log(N_D)) * sum_entropy
+    else:
+        # Rényi 熵公式计算
+        sum_p_alpha = 0
+        for i in range(N_D):
+            p = getP(s_k, s_k[i])
+            if p == 0:
+                continue
+            sum_p_alpha += pow(p, alpha)  # 计算 p^alpha
+        renyi_entropy = (1 / (1 - alpha)) * math.log(sum_p_alpha)  # 公式中的 log 部分
+        return renyi_entropy
+
+# 计算权重
+def getWk(N_D, s, s_i, alpha=1):
+    sum_entropy = 0
     for i in range(len(s)):
-        sum += getEk(N_D, s[i])
-    return (1 - getEk(N_D, s_i)) / (len(s) - sum)
-
-
+        sum_entropy += getRenyiEntropy(N_D, s[i], alpha)  # 计算所有指标的熵值和
+    return (1 - getRenyiEntropy(N_D, s_i, alpha)) / (len(s) - sum_entropy)  # 返回当前指标的权重
+# 指标加权平均
 def getTauI(i, N_D, s):
     sum = 0
     for k in range(len(s)):
