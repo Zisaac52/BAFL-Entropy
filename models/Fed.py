@@ -75,7 +75,7 @@ def getP(s_k, s_k_i):
 #         return renyi_entropy
 
 # 计算 Tsallis 熵
-def getTsallisEntropy(N_D, s_k, q=2):
+def getTsallisEntropy(N_D, s_k, q=3):
     """
     计算 Tsallis 熵。
     
@@ -114,7 +114,7 @@ def getTsallisEntropy(N_D, s_k, q=2):
 #         sum_entropy += getRenyiEntropy(N_D, s[i], alpha)  # 计算所有指标的熵值和
 #     return (1 - getRenyiEntropy(N_D, s_i, alpha)) / (len(s) - sum_entropy)  # 返回当前指标的权重
 # 计算权重 W_j
-def getWkTsallis(N_D, s, s_i, q=2):
+def getWkTsallis(N_D, s, s_i, q=3):
     """
     计算基于 Tsallis 熵的权重 W_j。
     
@@ -138,7 +138,7 @@ def getWkTsallis(N_D, s, s_i, q=2):
 #         sum += getWk(N_D, s, s[k]) * s[k][i]
 #     return sum
 # 修改后的 getTauI 函数
-def getTauI(i, N_D, s, q=2):
+def getTauI(i, N_D, s, q=3):
     """
     使用 Tsallis 熵计算加权平均 Tau。
     
