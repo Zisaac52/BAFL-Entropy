@@ -45,19 +45,28 @@ weights = []
 
 # 合并本地模型到全局模型
 def merge(uid, address, data):
-    print("Merging local model from node:", address)
+    print(f"Starting to merge model from {address}. UID: {uid}")
+    
     alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
     if alpha == 0:
-        return
+        print(f"Alpha value is 0. Skipping merge for {address}.")
+        return None
     
     localStateDict = data['local_state_dict']
     globStateDict = data['global_state_dict']
+    
+    # 打印调试信息
+    print(f"Alpha value for merging: {alpha}")
     
     # 更新全局模型参数
     for k in globStateDict.keys():
         globStateDict[k] = (1 - alpha) * globStateDict[k] + alpha * localStateDict[k]
 
+    # 检查更新后的全局模型参数
     stateDictHex = stateDictToHex(globStateDict)
+    print(f"Global model updated. Partial state: {stateDictHex[:50]}...")  # 打印部分十六进制确认更新
+
+    # 计算分数并归一化
     s = normalization(data['s'])
     score = getTauI(uid, data['n_d'], s)
     
@@ -68,19 +77,35 @@ def merge(uid, address, data):
         'cur_global_state_dict': globStateDict
     }
 
+
 # 接收并合并节点的本地模型
 @app.route('/newLocalModel/<address>', methods=['POST'])
 def newLocalModel(address):
     data = request.json
-    localStateDict = hexToStateDict(data['local_model_hex'])
+    
+    # 检查接收到的数据
+    if not data or 'local_model_hex' not in data:
+        return 'Error: Invalid data', 400
+    
+    try:
+        localStateDict = hexToStateDict(data['local_model_hex'])
+    except Exception as e:
+        print(f"Error converting hex to state dict: {e}")
+        return 'Error processing model data', 500
     
     global net_glob
-    globalStateDict = net_glob.state_dict()  # 获取当前全局模型的状态字典
+    globalStateDict = net_glob.state_dict()  # 获取全局模型的状态字典
+
+    uid = globalState['uid'].get(address)
     
-    uid = globalState['uid'][address]  # 获取节点的 UID
+    # 确保该节点已经注册
+    if uid is None:
+        print(f"Error: Node {address} is not registered.")
+        return 'Node not registered', 400
+    
     globalState['s'][3][uid] = getDis(globalStateDict, localStateDict)  # 更新距离
 
-    # 合并本地模型到全局模型
+    # 调用 merge 函数，合并本地模型到全局模型
     res = merge(uid, address, {
         "local_state_dict": localStateDict,
         "global_state_dict": globalStateDict,
@@ -89,15 +114,26 @@ def newLocalModel(address):
         "uid": uid,
         "t0": globalState['t'][uid]
     })
-
-    if res:
-        # 更新全局状态
-        globalState['t'][uid] = time.time()
-        globalState['s'][1][uid] = float(res['score'])
-        net_glob.load_state_dict(hexToStateDict(res['model_state_hex']))  # 更新全局模型
+    
+    if not res:
+        print(f"Error: Merging model from {address} failed.")
+        return 'Model merging failed', 500
+    
+    # 更新全局模型
+    try:
+        net_glob.load_state_dict(hexToStateDict(res['model_state_hex']))
         print(f"Model from {address} successfully merged into global model.")
+        print(f"Updated global model state: {res['model_state_hex'][:50]}...")  # 打印部分十六进制值确认更新
+    except Exception as e:
+        print(f"Error updating global model: {e}")
+        return 'Error updating global model', 500
+
+    # 更新全局状态
+    globalState['t'][uid] = time.time()
+    globalState['s'][1][uid] = float(res['score'])
     
     return '1'
+
 
 # 返回或上传全局模型
 @app.route('/newGlobalModel', methods=['GET', 'POST'])
