@@ -46,7 +46,15 @@ weights = []
 # 合并本地模型到全局模型
 def merge(uid, address, data):
     print("Merging local model from node:", address)
-    alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
+    
+    # 定义真实标签分布和预测分布
+    p = [1, 0, 0]  # 真实标签分布 (one-hot 编码)
+    q = [0.8, 0.1, 0.1]  # 模型预测的概率分布
+    
+    # 计算 alpha
+    alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, 
+                    data['uid'], data['n_d'], data['s'], p, q)
+    
     if alpha == 0:
         return
     
@@ -59,7 +67,7 @@ def merge(uid, address, data):
 
     stateDictHex = stateDictToHex(globStateDict)
     s = normalization(data['s'])
-    score = getTauI(uid, data['n_d'], s)
+    score = getTauI(uid, data['n_d'], s, p, q)
     
     return {
         'model_state_hex': stateDictHex,

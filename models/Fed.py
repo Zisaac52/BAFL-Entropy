@@ -7,6 +7,18 @@ import copy
 import torch
 import math
 
+# 计算交叉熵
+def calculate_cross_entropy(p, q):
+    """
+    计算交叉熵 H(p, q)
+    p: 真实分布 (ground truth, 通常是 one-hot 编码)
+    q: 预测分布 (模型输出的概率)
+    """
+    cross_entropy = 0
+    for i in range(len(p)):
+        if q[i] > 0:  # 避免 log(0) 错误
+            cross_entropy += p[i] * math.log(q[i])
+    return -cross_entropy
 
 def FedAvg(w):
     w_avg = copy.deepcopy(w[0])
@@ -15,21 +27,7 @@ def FedAvg(w):
             w_avg[k] += w[i][k]
         w_avg[k] = torch.div(w_avg[k], len(w))
     return w_avg
-# 使用交叉熵进行加权的联邦平均算法
-# def FedAvgCrossEntropy(w, entropies):
-#     """
-#     w: 客户端的模型权重列表
-#     entropies: 客户端的交叉熵列表
-#     """
-#     weights = calculate_weights_cross_entropy(entropies)
-#     w_avg = copy.deepcopy(w[0])
 
-#     for k in w_avg.keys():
-#         w_avg[k] = torch.zeros_like(w_avg[k])  # 初始化为0
-#         for i in range(len(w)):
-#             w_avg[k] += w[i][k] * weights[i]
-    
-    return w_avg
 
 def getDis(globalW, w):
     sumDis = 0
@@ -65,89 +63,62 @@ def getDis(globalW, w):
 #     for i in range(len(s)):
 #         sum += getEk(N_D, s[i])
 #     return (1 - getEk(N_D, s_i)) / (len(s) - sum)
-
-# # 计算 Rényi 熵
-# def getRenyiEntropy(N_D, s_k, alpha=2):
-#     if alpha == 1:
-#         # α = 1 时，Rényi 熵退化为 Shannon 熵，特殊处理
-#         sum_entropy = 0
-#         for i in range(N_D):
-#             p = getP(s_k, s_k[i])
-#             if p == 0:
-#                 continue
-#             sum_entropy += p * math.log(p)
-#         return -1.0 * (1 / math.log(N_D)) * sum_entropy
-#     else:
-#         # Rényi 熵公式计算
-#         sum_p_alpha = 0
-#         for i in range(N_D):
-#             p = getP(s_k, s_k[i])
-#             if p == 0:
-#                 continue
-#             sum_p_alpha += pow(p, alpha)  # 计算 p^alpha
-#         renyi_entropy = (1 / (1 - alpha)) * math.log(sum_p_alpha)  # 公式中的 log 部分
-#         return renyi_entropy
-
-# # 计算权重
-# def getWk(N_D, s, s_i, alpha=1):
-#     sum_entropy = 0
-#     for i in range(len(s)):
-#         sum_entropy += getRenyiEntropy(N_D, s[i], alpha)  # 计算所有指标的熵值和
-#     return (1 - getRenyiEntropy(N_D, s_i, alpha)) / (len(s) - sum_entropy)  # 返回当前指标的权重
-# 计算交叉熵 H(p, q)
+# 计算交叉熵
 def calculate_cross_entropy(p, q):
-    """
-    计算交叉熵 H(p, q)
-    p: 真实分布 (ground truth, 通常是 one-hot 编码)
-    q: 预测分布 (模型输出的概率)
-    """
     cross_entropy = 0
     for i in range(len(p)):
-        if q[i] > 0:  # 避免 log(0) 错误
+        if q[i] > 0:
             cross_entropy += p[i] * math.log(q[i])
-    
     return -cross_entropy
 
-
-# 计算权重 W_j
+# 根据交叉熵计算权重
 def calculate_weights_cross_entropy(entropies):
-    """
-    计算基于交叉熵的权重 W_j
-    entropies: 每个客户端的交叉熵值
-    """
     sum_entropy = sum([1 - H for H in entropies])
     if sum_entropy == 0:
         return [1.0 / len(entropies)] * len(entropies)
-    
     weights = [(1 - H) / sum_entropy for H in entropies]
     return weights
-# # 指标加权平均
+
+
 # def getTauI(i, N_D, s):
 #     sum = 0
 #     for k in range(len(s)):
 #         sum += getWk(N_D, s, s[k]) * s[k][i]
 #     return sum
-# 添加交叉熵版本的 getTauI
+# 修改 getTauI 函数，使用交叉熵计算权重
 def getTauI(i, N_D, s, p, q):
     """
-    计算交叉熵版本的 Tau 值。
-    i: 当前客户端的索引
-    N_D: 客户端数量
-    s: 客户端的指标值
-    p: 真实分布（每个客户端的数据标签）
-    q: 预测分布（每个客户端模型输出的概率）
+    i: 当前客户端索引
+    N_D: 客户端总数
+    s: 评分列表
+    p: 真实标签分布
+    q: 预测概率分布
     """
+    # 为每个客户端计算交叉熵
     cross_entropies = []
     for client_idx in range(N_D):
-        cross_entropies.append(calculate_cross_entropy(p[client_idx], q[client_idx]))  # 计算交叉熵
+        # 假设每个客户端都使用相同的 p 和 q
+        # 在实际应用中，可能需要为每个客户端提供不同的 p 和 q
+        cross_entropy = calculate_cross_entropy(p, q)
+        cross_entropies.append(cross_entropy)
     
-    weights = calculate_weights_cross_entropy(cross_entropies)  # 计算权重
-    sum_weighted_entropy = 0
-    for k in range(N_D):
-        sum_weighted_entropy += weights[k] * s[k][i]  # 加权求和
-
-    return sum_weighted_entropy
-
+    # 计算权重：交叉熵越小，权重越大
+    weights = []
+    total_weight = 0
+    for entropy in cross_entropies:
+        weight = 1 / (entropy + 1e-10)  # 添加小值避免除零
+        weights.append(weight)
+        total_weight += weight
+    
+    # 归一化权重
+    normalized_weights = [w/total_weight for w in weights]
+    
+    # 计算加权得分
+    weighted_score = 0
+    for k in range(len(s)):
+        weighted_score += normalized_weights[k] * s[k][i]
+    
+    return weighted_score
 
 # 根据牛顿冷却法取得当前模型的权重
 def getR(t, t0, theta, R0):
@@ -180,27 +151,15 @@ def normalization(s):
     return res
 
 
-# def getAlpha(kexi, t, t0, theta, R0, i, N_D, s):
-#     # 归一化解决时间戳数值过大导致的熵权过小的问题。
-#     s = normalization(s)
-#     return kexi * getR(t, t0, theta, R0) * getTauI(i, N_D, s)
 def getAlpha(kexi, t, t0, theta, R0, i, N_D, s, p, q):
-    """
-    使用交叉熵计算的动态 Alpha 权重
-    kexi: 系数
-    t, t0: 时间戳
-    theta: 温度参数
-    R0: 初始权重
-    i: 当前客户端索引
-    N_D: 客户端数量
-    s: 指标值
-    p: 真实分布
-    q: 预测分布
-    """
-    # 归一化
+    # 归一化 s
     s = normalization(s)
     
-    # 使用交叉熵计算 Tau
+    # 计算 R(t)
+    r_value = getR(t, t0, theta, R0)
+    
+    # 计算 TauI
     tau_i = getTauI(i, N_D, s, p, q)
     
-    return kexi * getR(t, t0, theta, R0) * tau_i
+    # 返回 alpha
+    return kexi * r_value * tau_i
