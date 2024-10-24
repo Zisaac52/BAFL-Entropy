@@ -43,30 +43,82 @@ globalState = {
 # 模型聚合的结果
 weights = []
 
+def get_true_distribution(data):
+    """
+    获取真实标签分布
+    """
+    try:
+        # 这里应该根据实际情况获取真实分布
+        # 示例：返回一个简单的 one-hot 向量
+        num_classes = 10  # MNIST/CIFAR10 的类别数
+        distribution = [0.0] * num_classes
+        distribution[0] = 1.0  # 假设第一类是真实标签
+        return distribution
+    except Exception as e:
+        print(f"Error in get_true_distribution: {e}")
+        return [0.1] * 10  # 返回均匀分布作为后备
+
+def get_predicted_distribution(data):
+    """
+    获取模型预测的概率分布
+    """
+    try:
+        # 这里应该根据实际情况获取预测分布
+        # 示例：返回一个模拟的预测分布
+        num_classes = 10
+        distribution = [0.1] * num_classes
+        distribution[0] = 0.2  # 稍微提高第一类的预测概率
+        return distribution
+    except Exception as e:
+        print(f"Error in get_predicted_distribution: {e}")
+        return [0.1] * 10  # 返回均匀分布作为后备
+
 # 合并本地模型到全局模型
 def merge(uid, address, data):
-    print("Merging local model from node:", address)
-    alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
-    if alpha == 0:
-        return
-    
-    localStateDict = data['local_state_dict']
-    globStateDict = data['global_state_dict']
-    
-    # 更新全局模型参数
-    for k in globStateDict.keys():
-        globStateDict[k] = (1 - alpha) * globStateDict[k] + alpha * localStateDict[k]
+    print(f"Merging local model from node: {address}")
+    try:
+        # 计算 alpha
+        alpha = getAlpha(
+            kexi=1,
+            t=int(time.time()),
+            t0=data['t0'],
+            theta=0.003,
+            R0=1,
+            i=data['uid'],
+            N_D=data['n_d'],
+            s=data['s']
+        )
+        
+        if alpha == 0:
+            print(f"Alpha is 0 for node {address}")
+            return
+        
+        print(f"Calculated alpha: {alpha} for node {address}")
+        
+        localStateDict = data['local_state_dict']
+        globStateDict = data['global_state_dict']
+        
+        # 更新全局模型参数
+        for k in globStateDict.keys():
+            globStateDict[k] = (1 - alpha) * globStateDict[k] + alpha * localStateDict[k]
 
-    stateDictHex = stateDictToHex(globStateDict)
-    s = normalization(data['s'])
-    score = getTauI(uid, data['n_d'], s)
-    
-    return {
-        'model_state_hex': stateDictHex,
-        'score': score,
-        'address': address,
-        'cur_global_state_dict': globStateDict
-    }
+        stateDictHex = stateDictToHex(globStateDict)
+        s = normalization(data['s'])
+        
+        # 使用默认参数调用 getTauI
+        score = getTauI(uid, data['n_d'], s)
+        
+        print(f"Model from {address} successfully merged into global model.")
+        
+        return {
+            'model_state_hex': stateDictHex,
+            'score': score,
+            'address': address,
+            'cur_global_state_dict': globStateDict
+        }
+    except Exception as e:
+        print(f"Error in merge function: {e}")
+        return None
 
 # 接收并合并节点的本地模型
 @app.route('/newLocalModel/<address>', methods=['POST'])
