@@ -45,28 +45,33 @@ weights = []
 
 # 合并本地模型到全局模型
 def merge(uid, address, data):
-    print("Merging local model from node:", address)
-    alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
-    if alpha == 0:
-        return
-    
-    localStateDict = data['local_state_dict']
-    globStateDict = data['global_state_dict']
-    
-    # 更新全局模型参数
-    for k in globStateDict.keys():
-        globStateDict[k] = (1 - alpha) * globStateDict[k] + alpha * localStateDict[k]
-
-    stateDictHex = stateDictToHex(globStateDict)
-    s = normalization(data['s'])
-    score = getTauI(uid, data['n_d'], s)
-    
-    return {
-        'model_state_hex': stateDictHex,
-        'score': score,
-        'address': address,
-        'cur_global_state_dict': globStateDict
-    }
+    try:
+        print("Merging local model from node:", address)
+        alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
+        if alpha == 0:
+            print(f"Warning: alpha is 0 for node {address}")
+            return None
+        
+        localStateDict = data['local_state_dict']
+        globStateDict = data['global_state_dict']
+        
+        # 更新全局模型参数
+        for k in globStateDict.keys():
+            globStateDict[k] = (1 - alpha) * globStateDict[k] + alpha * localStateDict[k]
+        
+        stateDictHex = stateDictToHex(globStateDict)
+        s = normalization(data['s'])
+        score = getTauI(uid, data['n_d'], s)
+        
+        return {
+            'model_state_hex': stateDictHex,
+            'score': score,
+            'address': address,
+            'cur_global_state_dict': globStateDict
+        }
+    except Exception as e:
+        print(f"Error in merge: {e}")
+        return None
 
 # 接收并合并节点的本地模型
 @app.route('/newLocalModel/<address>', methods=['POST'])
