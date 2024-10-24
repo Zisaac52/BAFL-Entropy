@@ -1,6 +1,7 @@
 # BAFL-Entropy
 熵权法用于异步联邦学习
 代码引用自
+```
 @article{REPO-283,
     author = "Feng, Lei and Zhao, Yiqi and Guo, Shaoyong and Qiu, Xuesong and Li, Wenjing and Yu, Peng",
     journal = "IEEE Transactions on Computers",
@@ -11,3 +12,4 @@
     volume = "71",
     year = "2021"
 }
+```
