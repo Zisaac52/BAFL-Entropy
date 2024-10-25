@@ -75,37 +75,32 @@ def getP(s_k, s_k_i):
 #         return renyi_entropy
 
 # 计算 Tsallis 熵
-def getTsallisEntropy(N_D, s_k, q=3):
-    """
-    计算 Tsallis 熵。
+def getTsallisEntropy(N_D, s_k, q=2):
+    """改进的 Tsallis 熵计算"""
+    # 计算概率分布
+    probabilities = []
+    sum_p = 0
+    for i in range(N_D):
+        p = getP(s_k, s_k[i])
+        if p > 0:  # 只考虑正概率
+            probabilities.append(p)
+            sum_p += p
     
-    参数：
-    - N_D: 总数据数目
-    - s_k: 概率分布
-    - q: Tsallis 熵的参数
+    # 归一化概率
+    if sum_p == 0:
+        return 0
+    probabilities = [p/sum_p for p in probabilities]
     
-    返回:
-    - Tsallis 熵值
-    """
     if q == 1:
-        # q = 1 时，Tsallis 熵退化为 Shannon 熵
-        sum_entropy = 0
-        for i in range(N_D):
-            p = getP(s_k, s_k[i])
-            if p == 0:
-                continue
-            sum_entropy += p * math.log(p)
-        return -1.0 * (1 / math.log(N_D)) * sum_entropy
+        # Shannon 熵情况
+        entropy = 0
+        for p in probabilities:
+            entropy -= p * math.log(p)
+        return entropy / math.log(max(2, N_D))  # 避免 N_D=1 的情况
     else:
-        # Tsallis 熵的计算
-        sum_p_q = 0
-        for i in range(N_D):
-            p = getP(s_k, s_k[i])
-            if p == 0:
-                continue
-            sum_p_q += pow(p, q)  # 计算 p^q
-        tsallis_entropy = (1 / (q - 1)) * (1 - sum_p_q)  # Tsallis 熵公式
-        return tsallis_entropy
+        # Tsallis 熵计算
+        sum_p_q = sum(pow(p, q) for p in probabilities)
+        return (1 - sum_p_q) / (q - 1)
 
 # # 计算权重
 # def getWk(N_D, s, s_i, alpha=1):
@@ -114,23 +109,25 @@ def getTsallisEntropy(N_D, s_k, q=3):
 #         sum_entropy += getRenyiEntropy(N_D, s[i], alpha)  # 计算所有指标的熵值和
 #     return (1 - getRenyiEntropy(N_D, s_i, alpha)) / (len(s) - sum_entropy)  # 返回当前指标的权重
 # 计算权重 W_j
-def getWkTsallis(N_D, s, s_i, q=3):
-    """
-    计算基于 Tsallis 熵的权重 W_j。
-    
-    参数：
-    - N_D: 总数据数目
-    - s: 所有指标的概率分布
-    - s_i: 当前指标的概率分布
-    - q: Tsallis 熵的参数
-    
-    返回:
-    - 权重 W_j
-    """
-    sum_entropy = 0
-    for i in range(len(s)):
-        sum_entropy += getTsallisEntropy(N_D, s[i], q)  # 计算所有指标的熵值和
-    return (1 - getTsallisEntropy(N_D, s_i, q)) / (len(s) - sum_entropy)  # 返回当前指标的权重
+def getWkTsallis(N_D, s, s_i, q=2):
+    """改进的权重计算"""
+    try:
+        entropies = []
+        for i in range(len(s)):
+            entropy = getTsallisEntropy(N_D, s[i], q)
+            entropies.append(entropy)
+        
+        sum_entropy = sum(entropies)
+        if sum_entropy == len(s):  # 所有熵都为1的情况
+            return 1.0 / len(s)
+            
+        current_entropy = getTsallisEntropy(N_D, s_i, q)
+        weight = (1 - current_entropy) / (len(s) - sum_entropy)
+        
+        # 确保权重在合理范围内
+        return max(0, min(1, weight))
+    except:
+        return 1.0 / len(s)  # 出错时返回均匀权重
 # # 指标加权平均
 # def getTauI(i, N_D, s):
 #     sum = 0
@@ -138,7 +135,7 @@ def getWkTsallis(N_D, s, s_i, q=3):
 #         sum += getWk(N_D, s, s[k]) * s[k][i]
 #     return sum
 # 修改后的 getTauI 函数
-def getTauI(i, N_D, s, q=3):
+def getTauI(i, N_D, s, q=2):
     """
     使用 Tsallis 熵计算加权平均 Tau。
     
@@ -162,28 +159,21 @@ def getR(t, t0, theta, R0):
 
 
 def normalization(s):
+    """改进的归一化处理"""
+    if not s or not s[0]:
+        return s
+    
     res = []
     for k in range(len(s)):
-        res.append([])
-        # min = s[k][0]
-        # max = s[k][0]
-        # for i in range(len(s[k])):
-        #     if s[k][i] < min:
-        #         min = s[k][i]
-        #     if s[k][i] > max:
-        #         max = s[k][i]
-        sum = 0
-        for i in range(len(s[k])):
-            sum += s[k][i]
-        if sum == 0:
-            return 0
-        # for i in range(len(s[k])):
-        #     if max == min:
-        #         res[k].append(1/len(s[k]))
-        #         continue
-        #     res[k].append((s[k][i] - min) / (max - min))
-        for i in range(len(s[k])):
-            res[k].append(s[k][i] / sum)
+        if not s[k]:
+            res.append([])
+            continue
+            
+        sum_values = sum(s[k])
+        if sum_values == 0:
+            res.append([1.0/len(s[k])] * len(s[k]))  # 均匀分布
+        else:
+            res.append([v/sum_values for v in s[k]])
     return res
 
 
