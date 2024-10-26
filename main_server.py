@@ -46,9 +46,25 @@ weights = []
 # 合并本地模型到全局模型
 def merge(uid, address, data):
     print("Merging local model from node:", address)
-    alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, data['uid'], data['n_d'], data['s'])
+    
+    # 确保评分列表维度正确
+    if uid >= len(data['s'][0]):
+        print(f"Warning: UID {uid} is out of range for score lists")
+        return None
+    
+    # 定义真实标签分布和预测分布
+    p = [1, 0, 0]  # 真实标签分布 (one-hot编码)
+    q = [0.8, 0.1, 0.1]  # 模型预测的概率分布
+    
+    try:
+        alpha = getAlpha(1, int(time.time()), data['t0'], 0.003, 1, 
+                        data['uid'], data['n_d'], data['s'], p, q)
+    except Exception as e:
+        print(f"Error calculating alpha: {e}")
+        return None
+    
     if alpha == 0:
-        return
+        return None
     
     localStateDict = data['local_state_dict']
     globStateDict = data['global_state_dict']
@@ -59,7 +75,7 @@ def merge(uid, address, data):
 
     stateDictHex = stateDictToHex(globStateDict)
     s = normalization(data['s'])
-    score = getTauI(uid, data['n_d'], s)
+    score = getTauI(uid, data['n_d'], s, p, q)
     
     return {
         'model_state_hex': stateDictHex,
@@ -128,12 +144,21 @@ def register(address, dataSize):
     uid = globalState['n_d']  # 分配一个新的 UID
     globalState['uid'][address] = uid
     globalState['n_d'] += 1  # 更新节点计数
+    
+    # 确保所有评分列表被正确初始化
+    for i in range(4):  # s有4个子列表
+        while len(globalState['s'][i]) < globalState['n_d']:
+            default_value = 0.0
+            if i == 1:  # 对于得分列表使用0.5作为默认值
+                default_value = 0.5
+            elif i == 2:  # 对于Tau值使用1作为默认值
+                default_value = 1.0
+            globalState['s'][i].append(default_value)
+    
     globalState['scores'].append(0)
-    globalState['t'].append(time.time())  # 保存当前时间戳
-    globalState['s'][0].append(dataSize)  # 记录数据大小
-    globalState['s'][1].append(0.5)  # 默认得分
-    globalState['s'][2].append(1)  # 默认 Tau 值
-    globalState['s'][3].append(0)  # 默认距离
+    globalState['t'].append(time.time())
+    globalState['s'][0][uid] = dataSize  # 设置数据大小
+    
     return True
 
 # 处理节点的注册请求
